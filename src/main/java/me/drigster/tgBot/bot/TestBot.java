@@ -1,6 +1,7 @@
 package me.drigster.tgBot.bot;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,9 @@ import org.springframework.web.client.HttpClientErrorException.NotFound;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,77 +48,114 @@ public class TestBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        if(!update.hasMessage() || !update.getMessage().hasText()) {
-            return;
-        }
-
-        String message = update.getMessage().getText();
-        String chatId = update.getMessage().getChatId().toString();
-        switch (message) {
-            case START -> {
-                lastCommand = START;
-
-                startCommand(chatId);
+        if((update.hasMessage() && update.getMessage().hasText()) || update.hasCallbackQuery() && update.getCallbackQuery().getData().startsWith("/")) {
+            String message;
+            String chatId;
+            if(update.hasMessage()){
+                message = update.getMessage().getText();
+                chatId = update.getMessage().getChatId().toString();
             }
-            case HELP -> {
-                lastCommand = HELP;
-
-                helpCommand(chatId);
+            else if(update.hasCallbackQuery()){
+                message = update.getCallbackQuery().getData();
+                chatId = update.getCallbackQuery().getMessage().getChatId().toString();
             }
-            case GET_ALL -> {
-                lastCommand = GET_ALL;
-
-                getAllCommand(chatId);
+            else {
+                return;
             }
-            case GET -> {
-                lastCommand = GET;
+            
+            switch (message) {
+                case START -> {
+                    lastCommand = START;
 
-                sendMsg(chatId, "Plz type todo id:");
-            }
-            case CREATE -> {
-                lastCommand = CREATE;
+                    startCommand(chatId);
+                }
+                case HELP -> {
+                    lastCommand = HELP;
 
-                sendMsg(chatId, "Plz type todo text:");
-            }
-            case DO -> {
-                lastCommand = DO;
+                    helpCommand(chatId);
+                }
+                case GET_ALL -> {
+                    lastCommand = GET_ALL;
 
-                sendMsg(chatId, "Plz type todo id:");
-            }
-            case UNDO -> {
-                lastCommand = UNDO;
+                    getAllCommand(chatId);
+                }
+                case GET -> {
+                    lastCommand = GET;
 
-                sendMsg(chatId, "Plz type todo id:");
-            }
-            case DELETE -> {
-                lastCommand = DELETE;
+                    sendMsg(chatId, "Plz type todo id:");
+                }
+                case CREATE -> {
+                    lastCommand = CREATE;
 
-                sendMsg(chatId, "Plz type todo id:");
-            }
-            case DELETE_ALL -> {
-                lastCommand = DELETE_ALL;
+                    sendMsg(chatId, "Plz type todo text:");
+                }
+                case DO -> {
+                    lastCommand = DO;
 
-                deleteAllCommand(chatId);
-            }
-            default -> {
-                switch (lastCommand) {
-                    case GET -> {
-                        getCommand(chatId, message);
-                    }
-                    case CREATE -> {
-                        createCommand(chatId, message);
-                    }
-                    case DELETE -> {
-                        deleteCommand(chatId, message);
-                    }
-                    case DO -> {
-                        doCommand(chatId, message);
-                    }
-                    case UNDO -> {
-                        undoCommand(chatId, message);
+                    sendMsg(chatId, "Plz type todo id:");
+                }
+                case UNDO -> {
+                    lastCommand = UNDO;
+
+                    sendMsg(chatId, "Plz type todo id:");
+                }
+                case DELETE -> {
+                    lastCommand = DELETE;
+
+                    sendMsg(chatId, "Plz type todo id:");
+                }
+                case DELETE_ALL -> {
+                    lastCommand = DELETE_ALL;
+
+                    deleteAllCommand(chatId);
+                }
+                default -> {
+                    switch (lastCommand) {
+                        case GET -> {
+                            getCommand(chatId, message);
+                        }
+                        case CREATE -> {
+                            createCommand(chatId, message);
+                        }
+                        case DELETE -> {
+                            deleteCommand(chatId, message);
+                        }
+                        case DO -> {
+                            doCommand(chatId, message);
+                        }
+                        case UNDO -> {
+                            undoCommand(chatId, message);
+                        }
+                        default -> {
+                            System.out.println("Unknown command: " + message);
+                            System.out.println(message);
+                            sendMsg(chatId, "Unknown command");
+                        }
                     }
                 }
             }
+        }
+        else if(update.hasCallbackQuery()) {
+            String message = update.getCallbackQuery().getData();
+            String chatId = update.getCallbackQuery().getMessage().getChatId().toString();
+            switch (message.split(" ")[0]) {
+                case "delete" -> {
+                    deleteCommand(chatId, message.split(" ")[1]);
+                }
+                case "do" -> {
+                    doCommand(chatId, message.split(" ")[1]);
+                }
+                case "undo" -> {
+                    undoCommand(chatId, message.split(" ")[1]);
+                }
+                default -> {
+                    sendMsg(chatId, "Unknown command");
+                }
+            }
+        }
+        else {
+            System.out.println("Unhandeled update:");
+            System.out.println(update);
         }
     }
 
@@ -161,124 +202,114 @@ public class TestBot extends TelegramLongPollingBot {
             return;
         }
 
-        sendMsg(chatId, "<pre>" + generateTable(todos) + "</pre>");
+        InlineKeyboardMarkup inlineKeyboard = InlineKeyboardMarkup.builder()
+            .keyboardRow(List.of(
+                InlineKeyboardButton.builder().text("Get").callbackData("/get").build(),
+                InlineKeyboardButton.builder().text("Get all").callbackData("/getall").build(),
+                InlineKeyboardButton.builder().text("Create").callbackData("/create").build()
+            ))
+            .keyboardRow(List.of(
+                InlineKeyboardButton.builder().text("Do").callbackData("/do").build(),
+                InlineKeyboardButton.builder().text("Undo").callbackData("/undo").build(),
+                InlineKeyboardButton.builder().text("Delete").callbackData("/delete").build()
+            ))
+            .build();
+        sendMsg(chatId, "<pre>" + generateTable(todos) + "</pre>", inlineKeyboard);
     }
 
     private void getCommand(String chatId, String message) {
-        if(!lastCommand.equals(GET)){
-            lastCommand = GET;
+        lastCommand = "";
 
-            sendMsg(chatId, "Plz type todo id:");
+        if (!isNumeric(message)) {
+            sendMsg(chatId, "Id must be number");
+            return;
         }
-        else {
-            lastCommand = "";
 
-            if (!isNumeric(message)) {
-                sendMsg(chatId, "Id must be number");
-                return;
-            }
-
-            Todo todo;
-            try {
-                todo = restTemplate.getForObject(
-                    "http://localhost:8080/todo/" + message, Todo.class);
-            } catch (NotFound e) {
-                sendMsg(chatId, "Todo not found");
-                return;
-            } catch (Exception e) {
-                System.out.println(e);
-                sendMsg(chatId, "Internal error");
-                return;
-            }
-            
-
-            if (todo == null) {
-                sendMsg(chatId, "Todo not found");
-                return;
-            }
-
-            sendMsg(chatId, todo.toString());
+        Todo todo;
+        try {
+            todo = restTemplate.getForObject(
+                "http://localhost:8080/todo/" + message, Todo.class);
+        } catch (NotFound e) {
+            sendMsg(chatId, "Todo not found");
+            return;
+        } catch (Exception e) {
+            System.out.println(e);
+            sendMsg(chatId, "Internal error");
+            return;
         }
+        
+
+        if (todo == null) {
+            sendMsg(chatId, "Todo not found");
+            return;
+        }
+
+        sendMsg(chatId, todo.toString(), todo.getKeyboard());
     }
 
     private void createCommand(String chatId, String message) {
-        if(!lastCommand.equals(CREATE)){
-            lastCommand = CREATE;
+        lastCommand = "";
 
-            sendMsg(chatId, "Plz type todo text:");
+        if (message.length() < 1) {
+            sendMsg(chatId, "Text can't be empty");
+            return;
         }
-        else {
-            lastCommand = "";
+        if (message.length() > 255) {
+            sendMsg(chatId, "Text must be shorter chan 255 symbols");
+            return;
+        }
 
-            if (message.length() < 1) {
-                sendMsg(chatId, "Text can't be empty");
-                return;
-            }
-            if (message.length() > 255) {
-                sendMsg(chatId, "Text must be shorter chan 255 symbols");
-                return;
-            }
+        Map<String, String> todoMap = new HashMap<String, String>();
+        todoMap.put("text", message);
 
-            Map<String, String> todoMap = new HashMap<String, String>();
-            todoMap.put("text", message);
-
-            ObjectMapper objectMapper = new ObjectMapper();
-            String todoJson;
-            try {
-                todoJson = objectMapper.writeValueAsString(todoMap);
-            } catch (Exception e) {
-                System.out.println(e);
-                sendMsg(chatId, "Internal error");
-                return;
-            }
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<String> request = new HttpEntity<String>(todoJson, headers);
-
-            Todo todo;
-            try {
-                todo = restTemplate.postForObject("http://localhost:8080/todos", request, Todo.class);
-            } catch (Exception e) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        String todoJson;
+        try {
+            todoJson = objectMapper.writeValueAsString(todoMap);
+        } catch (Exception e) {
             System.out.println(e);
-                sendMsg(chatId, "Internal error");
-                return;
-            }
-            
-            if (todo == null) {
-                sendMsg(chatId, "Todo was not created");
-                return;
-            }
-
-            sendMsg(chatId, "Todo created: ");
-            sendMsg(chatId, todo.toString());
+            sendMsg(chatId, "Internal error");
+            return;
         }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<String> request = new HttpEntity<String>(todoJson, headers);
+
+        Todo todo;
+        try {
+            todo = restTemplate.postForObject("http://localhost:8080/todos", request, Todo.class);
+        } catch (Exception e) {
+        System.out.println(e);
+            sendMsg(chatId, "Internal error");
+            return;
+        }
+        
+        if (todo == null) {
+            sendMsg(chatId, "Todo was not created");
+            return;
+        }
+
+        sendMsg(chatId, "Todo created: " + todo.toString(), todo.getKeyboard());
     }
 
-    private void deleteCommand(String chatId, String message) {
-        if(!lastCommand.equals(DELETE)){
-            lastCommand = DELETE;
+    private void deleteCommand(String chatId, String id) {
+        lastCommand = "";
 
-            sendMsg(chatId, "Plz type todo id:");
+        if (!isNumeric(id)) {
+            sendMsg(chatId, "Id must be number");
+            return;
         }
-        else {
-            lastCommand = "";
 
-            if (!isNumeric(message)) {
-                sendMsg(chatId, "Id must be number");
-                return;
-            }
-
-            try {
-                restTemplate.delete("http://localhost:8080/todo/" + message);
-            } catch (Exception e) {
-                System.out.println(e);
-                sendMsg(chatId, "Internal error");
-                return;
-            }
-
-            sendMsg(chatId, "Todo deleted");
+        try {
+            restTemplate.delete("http://localhost:8080/todo/" + id);
+        } catch (Exception e) {
+            System.out.println(e);
+            sendMsg(chatId, "Internal error");
+            return;
         }
+
+        sendMsg(chatId, "Todo deleted");
     }
 
     private void deleteAllCommand(String chatId) {
@@ -293,61 +324,52 @@ public class TestBot extends TelegramLongPollingBot {
         sendMsg(chatId, "Todos deleted");
     }
 
-    private void doCommand(String chatId, String message) {
-        if(!lastCommand.equals(DO)){
-            lastCommand = DO;
+    private void doCommand(String chatId, String id) {
+        lastCommand = "";
 
-            sendMsg(chatId, "Plz type todo id:");
+        if (!isNumeric(id)) {
+            sendMsg(chatId, "Id must be number");
+            return;
         }
-        else {
-            lastCommand = "";
 
-            if (!isNumeric(message)) {
-                sendMsg(chatId, "Id must be number");
-                return;
-            }
-
-            try {
-                restTemplate.getForEntity("http://localhost:8080/todo/" + message + "/done", null);
-            } catch (Exception e) {
-                System.out.println(e);
-                sendMsg(chatId, "Internal error");
-                return;
-            }
-
-            sendMsg(chatId, "Todo marked as done");
+        try {
+            restTemplate.getForEntity("http://localhost:8080/todo/" + id + "/done", null);
+        } catch (Exception e) {
+            System.out.println(e);
+            sendMsg(chatId, "Internal error");
+            return;
         }
+
+        sendMsg(chatId, "Todo marked as done");
     }
 
-    private void undoCommand(String chatId, String message) {
-        if(!lastCommand.equals(UNDO)){
-            lastCommand = UNDO;
+    private void undoCommand(String chatId, String id) {
+        lastCommand = "";
 
-            sendMsg(chatId, "Plz type todo id:");
+        if (!isNumeric(id)) {
+            sendMsg(chatId, "Id must be number");
+            return;
         }
-        else {
-            lastCommand = "";
 
-            if (!isNumeric(message)) {
-                sendMsg(chatId, "Id must be number");
-                return;
-            }
-
-            try {
-                restTemplate.getForEntity("http://localhost:8080/todo/" + message + "/undo", null);
-            } catch (Exception e) {
-                System.out.println(e);
-                sendMsg(chatId, "Internal error");
-                return;
-            }
-
-            sendMsg(chatId, "Todo marked as undone");
+        try {
+            restTemplate.getForEntity("http://localhost:8080/todo/" + id + "/undo", null);
+        } catch (Exception e) {
+            System.out.println(e);
+            sendMsg(chatId, "Internal error");
+            return;
         }
+
+        sendMsg(chatId, "Todo marked as undone");
     }
 
     private void sendMsg(String chatId, String text) {
+        sendMsg(chatId, text, null);
+    }
+
+    private void sendMsg(String chatId, String text, ReplyKeyboard replyKeyboard) {
         SendMessage sendMessage = new SendMessage(chatId, text);
         sendMessage.enableHtml(true);
+        sendMessage.setReplyMarkup(replyKeyboard);
         try {
             execute(sendMessage);
         } catch (TelegramApiException e) {
